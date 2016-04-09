@@ -1,0 +1,39 @@
+﻿<Page
+    x:Class="MetaWear.NugetImplementation.SampleApp.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:MetaWear.NugetImplementation.SampleApp"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <Page.Resources>
+        <local:ConnectionStateColorConverter x:Key="connectionColorConverter" ConnectedColor="Green" DisconnectedColor="Red"/>
+    </Page.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="100*"/>
+            <RowDefinition Height="800*"/>
+            <RowDefinition Height="100*"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" HorizontalAlignment="Center" FontSize="48" TextWrapping="Wrap" Text="Select MetaWear" 
+                   VerticalAlignment="Top" Foreground="#758cc0"/>
+        <ListView Grid.Row="1" x:Name="pairedDevicesListView" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" SelectionChanged="SelectedBtleDevice">
+            <ListView.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel>
+                        <TextBlock x:Name="nameblock" Text="{Binding Name}" HorizontalAlignment="Left" TextWrapping="Wrap" 
+                                   VerticalAlignment="Top" Height="57" Width="236" FontSize="36" Margin="10,10,0,0" />
+                        <TextBlock x:Name="connectedblock" Text="{Binding ConnectionStatus}" HorizontalAlignment="Left" TextWrapping="Wrap" 
+                                   VerticalAlignment="Top" Height="57" Width="236" FontSize="20" Margin="10,10,0,0"
+                                   Foreground="{Binding ConnectionStatus, Converter={StaticResource connectionColorConverter}}" />
+                    </StackPanel>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+        <Button Grid.Row="2" Content="Refresh" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" Margin="10,0" Click="refreshDevices"/>
+    </Grid>
+</Page>
