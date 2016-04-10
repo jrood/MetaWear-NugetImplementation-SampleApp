@@ -73,7 +73,7 @@ namespace MetaWear.NugetImplementation.SampleApp
         public ConsoleEntryType Type { get; }
         public string Value { get; set; }
     }
-    
+
     public sealed partial class DeviceInfo : Page
     {
         private static readonly Guid DEVICE_INFO_SERVICE = new Guid("0000180a-0000-1000-8000-00805f9b34fb"),
@@ -81,7 +81,9 @@ namespace MetaWear.NugetImplementation.SampleApp
             CHARACTERISTIC_MODEL_NUMBER = new Guid("00002a24-0000-1000-8000-00805f9b34fb"),
             CHARACTERISTIC_SERIAL_NUMBER = new Guid("00002a25-0000-1000-8000-00805f9b34fb"),
             CHARACTERISTIC_FIRMWARE_REVISION = new Guid("00002a26-0000-1000-8000-00805f9b34fb"),
-            CHARACTERISTIC_HARDWARE_REVISION = new Guid("00002a27-0000-1000-8000-00805f9b34fb");
+            CHARACTERISTIC_HARDWARE_REVISION = new Guid("00002a27-0000-1000-8000-00805f9b34fb"),
+            GUID_METAWEAR_SERVICE = new Guid("326A9000-85CB-9195-D9DD-464CFBBAE75A"),
+            METAWEAR_NOTIFY_CHARACTERISTIC = new Guid("326A9006-85CB-9195-D9DD-464CFBBAE75A");
         private static readonly Dictionary<Guid, String> DEVICE_INFO_NAMES = new Dictionary<Guid, String>();
 
         static DeviceInfo()
@@ -115,7 +117,7 @@ namespace MetaWear.NugetImplementation.SampleApp
         public DeviceInfo()
         {
             this.InitializeComponent();
-            
+
             conn = new BtleConnection();
             mwBoard = Functions.mbl_mw_metawearboard_create(ref conn);
 
@@ -131,7 +133,7 @@ namespace MetaWear.NugetImplementation.SampleApp
         protected override async void OnNavigatedTo(NavigationEventArgs e)
         {
             selectedBtleDevice = (BluetoothLEDevice)e.Parameter;
-            mwGattService = selectedBtleDevice.GetGattService(/* which guid goes here? */);
+            mwGattService = selectedBtleDevice.GetGattService(GUID_METAWEAR_SERVICE);
 
             foreach (var characteristic in selectedBtleDevice.GetGattService(DEVICE_INFO_SERVICE).GetAllCharacteristics())
             {
@@ -143,7 +145,7 @@ namespace MetaWear.NugetImplementation.SampleApp
                 outputListView.Items.Add(new ConsoleLine(ConsoleEntryType.INFO, DEVICE_INFO_NAMES[characteristic.Uuid] + ": " + value));
             }
 
-            mwNotifyChar = mwGattService.GetCharacteristics(/* which guid goes here? */).First();
+            mwNotifyChar = mwGattService.GetCharacteristics(METAWEAR_NOTIFY_CHARACTERISTIC).First();
             await mwNotifyChar.WriteClientCharacteristicConfigurationDescriptorAsync(GattClientCharacteristicConfigurationDescriptorValue.Notify);
             mwNotifyChar.ValueChanged += new TypedEventHandler<Windows.Devices.Bluetooth.GenericAttributeProfile.GattCharacteristic, GattValueChangedEventArgs>((Windows.Devices.Bluetooth.GenericAttributeProfile.GattCharacteristic sender, GattValueChangedEventArgs obj) => {
                 byte[] response = obj.CharacteristicValue.ToArray();
