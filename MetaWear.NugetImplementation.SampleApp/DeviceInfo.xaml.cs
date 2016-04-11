@@ -118,95 +118,33 @@ namespace MetaWear.NugetImplementation.SampleApp
         {
             this.InitializeComponent();
 
-            conn = new BtleConnection();
+            conn = new BtleConnection()
+            {
+                readGattChar = ReadGattChar,
+                writeGattChar = WriteGattChar
+            };
             mwBoard = Functions.mbl_mw_metawearboard_create(ref conn);
-
-            // what is the equivilant of these things with a btle connection?
-            conn.sendCommandDelegate = new SendCommand(sendMetaWearCommand);
-            conn.receivedSensorDataDelegate = new ReceivedSensorData(receivedSensorData);
-            Connection.Init(ref conn);
-
-            /* do we perhaps need to use this somehow: ?
-            Functions.mbl_mw_metawearboard_initialize(mwBoard, callback?); */
+            Functions.mbl_mw_metawearboard_initialize(mwBoard, Initialized);
         }
 
-        protected override async void OnNavigatedTo(NavigationEventArgs e)
+        private void ReadGattChar(IntPtr characteristic) {
+            // todo... read gatt char
+        }
+
+        private void WriteGattChar(IntPtr characteristic, IntPtr bytes, byte length) {
+            //todo... figure out how to write gatt char 
+        }
+
+        private void Initialized(){ }
+
+        protected override void OnNavigatedTo(NavigationEventArgs e)
         {
             selectedBtleDevice = (BluetoothLEDevice)e.Parameter;
-            mwGattService = selectedBtleDevice.GetGattService(GUID_METAWEAR_SERVICE);
-
-            foreach (var characteristic in selectedBtleDevice.GetGattService(DEVICE_INFO_SERVICE).GetAllCharacteristics())
-            {
-                var result = await characteristic.ReadValueAsync();
-                string value = result.Status == Windows.Devices.Bluetooth.GenericAttributeProfile.GattCommunicationStatus.Success ?
-                    System.Text.Encoding.UTF8.GetString(result.Value.ToArray(), 0, (int)result.Value.Length) :
-                    "N/A";
-                mwDeviceInfoChars.Add(characteristic.Uuid, value);
-                outputListView.Items.Add(new ConsoleLine(ConsoleEntryType.INFO, DEVICE_INFO_NAMES[characteristic.Uuid] + ": " + value));
-            }
-
-            mwNotifyChar = mwGattService.GetCharacteristics(METAWEAR_NOTIFY_CHARACTERISTIC).First();
-            await mwNotifyChar.WriteClientCharacteristicConfigurationDescriptorAsync(GattClientCharacteristicConfigurationDescriptorValue.Notify);
-            mwNotifyChar.ValueChanged += new TypedEventHandler<Windows.Devices.Bluetooth.GenericAttributeProfile.GattCharacteristic, GattValueChangedEventArgs>((Windows.Devices.Bluetooth.GenericAttributeProfile.GattCharacteristic sender, GattValueChangedEventArgs obj) => {
-                byte[] response = obj.CharacteristicValue.ToArray();
-
-                // should we use Functions.mbl_mw_settings_set_scan_response instead here?
-                MetaWearBoard.HandleResponse(mwBoard, response, (byte)response.Length);
-            });
         }
 
-        private string byteArrayToHex(byte[] array)
+        private void receivedSensorData(IntPtr signal)
         {
-            var builder = new StringBuilder();
-
-            builder.Append(string.Format("[0x{0:X2}", array[0]));
-            for (int i = 1; i < array.Length; i++)
-            {
-                builder.Append(string.Format(", 0x{0:X2}", array[i]));
-            }
-            builder.Append("]");
-            return builder.ToString();
-        }
-
-        private async void sendMetaWearCommand(IntPtr board, IntPtr command, byte len)
-        {
-            byte[] managedArray = new byte[len];
-            Marshal.Copy(command, managedArray, 0, len);
-            outputListView.Items.Add(new ConsoleLine(ConsoleEntryType.COMMAND, "Command: " + byteArrayToHex(managedArray)));
-
-            try
-            {
-                // is DEVICE_INFO_SERVICE the right guid to use here?
-                Windows.Devices.Bluetooth.GenericAttributeProfile.GattCharacteristic mwCommandChar = mwGattService.GetCharacteristics(/* which guid do i use here? */).FirstOrDefault();
-                GattCommunicationStatus status = await mwCommandChar.WriteValueAsync(managedArray.AsBuffer(), GattWriteOption.WriteWithoutResponse);
-
-                if (status != GattCommunicationStatus.Success)
-                {
-                    outputListView.Items.Add(new ConsoleLine(ConsoleEntryType.SEVERE, "Error writing command, GattCommunicationStatus= " + status));
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine(ex.Message);
-            }
-        }
-
-        private void receivedSensorData(IntPtr signal, ref Data data)
-        {
-            object managedValue = null;
-
-            switch (data.typeId)
-            {
-                case DataTypeId.UINT32:
-                    managedValue = Marshal.PtrToStructure<uint>(data.value);
-                    break;
-                case DataTypeId.FLOAT:
-                    managedValue = Marshal.PtrToStructure<float>(data.value);
-                    break;
-                case DataTypeId.CARTESIAN_FLOAT:
-                    managedValue = Marshal.PtrToStructure<CartesianFloat>(data.value);
-                    break;
-            }
+            int? managedValue = (int?)signal;
 
             ConsoleLine newLine = new ConsoleLine(ConsoleEntryType.SENSOR);
 
@@ -283,7 +221,7 @@ namespace MetaWear.NugetImplementation.SampleApp
                         Functions.mbl_mw_acc_mma8452q_set_range(mwBoard, AccelerometerMma8452q.FullScaleRange.FSR_8G);
                         Functions.mbl_mw_acc_mma8452q_write_acceleration_config(mwBoard);
 
-                        Functions.mbl_mw_datasignal_subscribe(signals[Signal.ACCELEROMETER], /* data? */);
+                        Functions.mbl_mw_datasignal_subscribe(signals[Signal.ACCELEROMETER], receivedSensorData);
                         Functions.mbl_mw_acc_mma8452q_enable_acceleration_sampling(mwBoard);
                         Functions.mbl_mw_acc_mma8452q_start(mwBoard);
                     }
@@ -340,8 +278,8 @@ namespace MetaWear.NugetImplementation.SampleApp
             {
                 if (toggleSwitch.IsOn)
                 {
-                    Functions.mbl_mw_datasignal_subscribe(signals[Signal.BMP280_ALTITUDE], /* data? */);
-                    Functions.mbl_mw_datasignal_subscribe(signals[Signal.BMP280_PRESSURE], /* data? */);
+                    Functions.mbl_mw_datasignal_subscribe(signals[Signal.BMP280_ALTITUDE], receivedSensorData);
+                    Functions.mbl_mw_datasignal_subscribe(signals[Signal.BMP280_PRESSURE], receivedSensorData);
                     Functions.mbl_mw_baro_bosch_start(mwBoard);
                 }
                 else {
@@ -364,7 +302,7 @@ namespace MetaWear.NugetImplementation.SampleApp
             {
                 if (toggleSwitch.IsOn)
                 {
-                    Functions.mbl_mw_datasignal_subscribe(signals[Signal.AMBIENT_LIGHT], /* data? */);
+                    Functions.mbl_mw_datasignal_subscribe(signals[Signal.AMBIENT_LIGHT], receivedSensorData);
                     Functions.mbl_mw_als_ltr329_start(mwBoard);
                 }
                 else {
@@ -386,7 +324,7 @@ namespace MetaWear.NugetImplementation.SampleApp
             {
                 if (toggleSwitch.IsOn)
                 {
-                    Functions.mbl_mw_datasignal_subscribe(signals[Signal.GYRO], /* data? */);
+                    Functions.mbl_mw_datasignal_subscribe(signals[Signal.GYRO], receivedSensorData);
                     Functions.mbl_mw_gyro_bmi160_set_odr(mwBoard, GyroBmi160.OutputDataRate.ODR_25HZ);
                     Functions.mbl_mw_gyro_bmi160_set_range(mwBoard, GyroBmi160.FullScaleRange.FSR_500DPS);
                     Functions.mbl_mw_gyro_bmi160_write_config(mwBoard);
@@ -414,7 +352,7 @@ namespace MetaWear.NugetImplementation.SampleApp
             {
                 if (toggleSwitch.IsOn)
                 {
-                    Functions.mbl_mw_datasignal_subscribe(signals[Signal.SWITCH], /* data? */);
+                    Functions.mbl_mw_datasignal_subscribe(signals[Signal.SWITCH], receivedSensorData);
                 }
                 else {
                     Functions.mbl_mw_datasignal_unsubscribe(signals[Signal.SWITCH]);
