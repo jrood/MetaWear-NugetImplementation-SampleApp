@@ -5,19 +5,14 @@ using MbientLab.MetaWear.Sensor;
 using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
-using System.Text;
+using Windows.ApplicationModel.Core;
 using Windows.Devices.Bluetooth;
+using Windows.UI.Core;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Data;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
-using System.Runtime.InteropServices.WindowsRuntime;
-using Windows.ApplicationModel.Core;
-using Windows.UI.Core;
-using System.Linq;
-using Windows.Devices.Bluetooth.GenericAttributeProfile;
-using Windows.Foundation;
 
 namespace MetaWear.NugetImplementation.SampleApp
 {
@@ -28,6 +23,7 @@ namespace MetaWear.NugetImplementation.SampleApp
         COMMAND,
         SENSOR
     }
+
     public class ConsoleLineColorConverter : IValueConverter
     {
         public SolidColorBrush SevereColor { get; set; }
@@ -108,8 +104,6 @@ namespace MetaWear.NugetImplementation.SampleApp
         private Dictionary<Signal, IntPtr> signals = new Dictionary<Signal, IntPtr>();
         private Dictionary<Guid, string> mwDeviceInfoChars = new Dictionary<Guid, string>();
         private BluetoothLEDevice selectedBtleDevice;
-        private GattDeviceService mwGattService;
-        private Windows.Devices.Bluetooth.GenericAttributeProfile.GattCharacteristic mwNotifyChar;
         private IntPtr mwBoard;
 
         private BtleConnection conn;
@@ -127,68 +121,87 @@ namespace MetaWear.NugetImplementation.SampleApp
             Functions.mbl_mw_metawearboard_initialize(mwBoard, Initialized);
         }
 
-        private void ReadGattChar(IntPtr characteristic) {
+        private void ReadGattChar(IntPtr characteristic)
+        {
             // todo... read gatt char
         }
 
-        private void WriteGattChar(IntPtr characteristic, IntPtr bytes, byte length) {
-            //todo... figure out how to write gatt char 
+        private void WriteGattChar(IntPtr characteristic, IntPtr bytes, byte length)
+        {
+            // todo... figure out how to write gatt char 
         }
 
-        private void Initialized(){ }
+        private void Initialized() { }
 
         protected override void OnNavigatedTo(NavigationEventArgs e)
         {
             selectedBtleDevice = (BluetoothLEDevice)e.Parameter;
         }
 
-        private void receivedSensorData(IntPtr signal)
+        public void acc_handler(IntPtr data) { receivedSensorData(data, Signal.ACCELEROMETER); }
+        public void baroAlt_handler(IntPtr data) { receivedSensorData(data, Signal.BMP280_ALTITUDE); }
+        public void baroPre_handler(IntPtr data) { receivedSensorData(data, Signal.BMP280_PRESSURE); }
+        public void amb_handler(IntPtr data) { receivedSensorData(data, Signal.AMBIENT_LIGHT); }
+        public void gyro_handler(IntPtr data) { receivedSensorData(data, Signal.GYRO); }
+        public void switch_handler(IntPtr data) { receivedSensorData(data, Signal.SWITCH); }
+
+        private void receivedSensorData(IntPtr data, Signal signal)
         {
-            int? managedValue = (int?)signal;
+            object managedValue = null;
+            
+            Data _data = Marshal.PtrToStructure<Data>(data);
+
+            switch (_data.typeId)
+            {
+                case DataTypeId.UINT32:
+                    managedValue = Marshal.PtrToStructure<uint>(_data.value);
+                    break;
+                case DataTypeId.FLOAT:
+                    managedValue = Marshal.PtrToStructure<float>(_data.value);
+                    break;
+                case DataTypeId.CARTESIAN_FLOAT:
+                    managedValue = Marshal.PtrToStructure<CartesianFloat>(_data.value);
+                    break;
+            }
+
+            if (managedValue == null) return;
 
             ConsoleLine newLine = new ConsoleLine(ConsoleEntryType.SENSOR);
-
-            if (managedValue != null)
+            
+            switch (signal)
             {
-                if (signals.ContainsKey(Signal.SWITCH) && signals[Signal.SWITCH] == signal)
-                {
-                    newLine.Value = "Switch ";
-                    newLine.Value += ((uint)managedValue) == 0 ? "Released" : "Pressed";
-                }
-                else if (signals.ContainsKey(Signal.ACCELEROMETER) && signals[Signal.ACCELEROMETER] == signal)
-                {
+                case Signal.ACCELEROMETER:
                     newLine.Value = "Acceleration: " + managedValue.ToString();
-                }
-                else if (signals.ContainsKey(Signal.BMP280_ALTITUDE) && signals[Signal.BMP280_ALTITUDE] == signal)
-                {
+                    break;
+                case Signal.BMP280_ALTITUDE:
                     newLine.Value = string.Format("Altitude: {0:F3}m", (float)managedValue);
-                }
-                else if (signals.ContainsKey(Signal.BMP280_PRESSURE) && signals[Signal.BMP280_PRESSURE] == signal)
-                {
+                    break;
+                case Signal.BMP280_PRESSURE:
                     newLine.Value = string.Format("Pressure: {0:F3}pa", (float)managedValue);
-                }
-                else if (signals.ContainsKey(Signal.AMBIENT_LIGHT) && signals[Signal.AMBIENT_LIGHT] == signal)
-                {
+                    break;
+                case Signal.AMBIENT_LIGHT:
                     newLine.Value = string.Format("Illuminance: {0:D}mlx", (uint)managedValue);
-                }
-                else if (signals.ContainsKey(Signal.GYRO) && signals[Signal.GYRO] == signal)
-                {
+                    break;
+                case Signal.GYRO:
                     newLine.Value = string.Format("Rotation: {0:S} \u00B0/s", managedValue.ToString());
-                }
-                else {
+                    break;
+                case Signal.SWITCH:
+                    newLine.Value = "Switch " + (((uint)managedValue) == 0 ? "Released" : "Pressed");
+                    break;
+                default:
                     newLine.Value = "Unexpected signal data";
-                }
+                    break;
+            }
 
-                if (CoreApplication.MainView.CoreWindow.Dispatcher.HasThreadAccess)
-                {
-                    outputListView.Items.Add(newLine);
-                }
-                else {
-                    CoreApplication.MainView.CoreWindow.Dispatcher.RunAsync(
-                        CoreDispatcherPriority.Normal,
-                        () => outputListView.Items.Add(newLine)
-                    );
-                }
+            if (CoreApplication.MainView.CoreWindow.Dispatcher.HasThreadAccess)
+            {
+                outputListView.Items.Add(newLine);
+            }
+            else {
+                CoreApplication.MainView.CoreWindow.Dispatcher.RunAsync(
+                    CoreDispatcherPriority.Normal,
+                    () => outputListView.Items.Add(newLine)
+                );
             }
         }
 
@@ -221,7 +234,7 @@ namespace MetaWear.NugetImplementation.SampleApp
                         Functions.mbl_mw_acc_mma8452q_set_range(mwBoard, AccelerometerMma8452q.FullScaleRange.FSR_8G);
                         Functions.mbl_mw_acc_mma8452q_write_acceleration_config(mwBoard);
 
-                        Functions.mbl_mw_datasignal_subscribe(signals[Signal.ACCELEROMETER], receivedSensorData);
+                        Functions.mbl_mw_datasignal_subscribe(signals[Signal.ACCELEROMETER], acc_handler);
                         Functions.mbl_mw_acc_mma8452q_enable_acceleration_sampling(mwBoard);
                         Functions.mbl_mw_acc_mma8452q_start(mwBoard);
                     }
@@ -278,8 +291,8 @@ namespace MetaWear.NugetImplementation.SampleApp
             {
                 if (toggleSwitch.IsOn)
                 {
-                    Functions.mbl_mw_datasignal_subscribe(signals[Signal.BMP280_ALTITUDE], receivedSensorData);
-                    Functions.mbl_mw_datasignal_subscribe(signals[Signal.BMP280_PRESSURE], receivedSensorData);
+                    Functions.mbl_mw_datasignal_subscribe(signals[Signal.BMP280_ALTITUDE], baroAlt_handler);
+                    Functions.mbl_mw_datasignal_subscribe(signals[Signal.BMP280_PRESSURE], baroPre_handler);
                     Functions.mbl_mw_baro_bosch_start(mwBoard);
                 }
                 else {
@@ -302,7 +315,7 @@ namespace MetaWear.NugetImplementation.SampleApp
             {
                 if (toggleSwitch.IsOn)
                 {
-                    Functions.mbl_mw_datasignal_subscribe(signals[Signal.AMBIENT_LIGHT], receivedSensorData);
+                    Functions.mbl_mw_datasignal_subscribe(signals[Signal.AMBIENT_LIGHT], amb_handler);
                     Functions.mbl_mw_als_ltr329_start(mwBoard);
                 }
                 else {
@@ -324,7 +337,7 @@ namespace MetaWear.NugetImplementation.SampleApp
             {
                 if (toggleSwitch.IsOn)
                 {
-                    Functions.mbl_mw_datasignal_subscribe(signals[Signal.GYRO], receivedSensorData);
+                    Functions.mbl_mw_datasignal_subscribe(signals[Signal.GYRO], gyro_handler);
                     Functions.mbl_mw_gyro_bmi160_set_odr(mwBoard, GyroBmi160.OutputDataRate.ODR_25HZ);
                     Functions.mbl_mw_gyro_bmi160_set_range(mwBoard, GyroBmi160.FullScaleRange.FSR_500DPS);
                     Functions.mbl_mw_gyro_bmi160_write_config(mwBoard);
@@ -352,7 +365,7 @@ namespace MetaWear.NugetImplementation.SampleApp
             {
                 if (toggleSwitch.IsOn)
                 {
-                    Functions.mbl_mw_datasignal_subscribe(signals[Signal.SWITCH], receivedSensorData);
+                    Functions.mbl_mw_datasignal_subscribe(signals[Signal.SWITCH], switch_handler);
                 }
                 else {
                     Functions.mbl_mw_datasignal_unsubscribe(signals[Signal.SWITCH]);
