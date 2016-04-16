@@ -4,82 +4,34 @@ using MbientLab.MetaWear.Peripheral;
 using MbientLab.MetaWear.Sensor;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.WindowsRuntime;
+using System.Text;
 using Windows.ApplicationModel.Core;
 using Windows.Devices.Bluetooth;
+using Windows.Devices.Bluetooth.GenericAttributeProfile;
+using Windows.Foundation;
 using Windows.UI.Core;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
-using Windows.UI.Xaml.Data;
-using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
 
 namespace MetaWear.NugetImplementation.SampleApp
 {
-    public enum ConsoleEntryType
-    {
-        SEVERE,
-        INFO,
-        COMMAND,
-        SENSOR
-    }
-
-    public class ConsoleLineColorConverter : IValueConverter
-    {
-        public SolidColorBrush SevereColor { get; set; }
-        public SolidColorBrush InfoColor { get; set; }
-        public SolidColorBrush CommandColor { get; set; }
-        public SolidColorBrush SensorColor { get; set; }
-
-        public object Convert(object value, Type targetType, object parameter, string language)
-        {
-            switch ((ConsoleEntryType)value)
-            {
-                case ConsoleEntryType.SEVERE:
-                    return SevereColor;
-                case ConsoleEntryType.INFO:
-                    return InfoColor;
-                case ConsoleEntryType.COMMAND:
-                    return CommandColor;
-                case ConsoleEntryType.SENSOR:
-                    return SensorColor;
-                default:
-                    throw new MissingMemberException("Unrecognized console entry type: " + value.ToString());
-            }
-        }
-
-        public object ConvertBack(object value, Type targetType, object parameter, string language)
-        {
-            throw new NotImplementedException();
-        }
-    }
-    public class ConsoleLine
-    {
-        public ConsoleLine(ConsoleEntryType type)
-        {
-            this.Type = type;
-        }
-
-        public ConsoleLine(ConsoleEntryType type, string value)
-        {
-            this.Type = type;
-            this.Value = value;
-        }
-
-        public ConsoleEntryType Type { get; }
-        public string Value { get; set; }
-    }
-
     public sealed partial class DeviceInfo : Page
     {
-        private static readonly Guid DEVICE_INFO_SERVICE = new Guid("0000180a-0000-1000-8000-00805f9b34fb"),
+        private static readonly Guid
+            GUID_METAWEAR_SERVICE = new Guid("326A9000-85CB-9195-D9DD-464CFBBAE75A"),
+            GUID_DEVICE_INFO_SERVICE = new Guid("0000180a-0000-1000-8000-00805f9b34fb"),
             CHARACTERISTIC_MANUFACTURER = new Guid("00002a29-0000-1000-8000-00805f9b34fb"),
             CHARACTERISTIC_MODEL_NUMBER = new Guid("00002a24-0000-1000-8000-00805f9b34fb"),
             CHARACTERISTIC_SERIAL_NUMBER = new Guid("00002a25-0000-1000-8000-00805f9b34fb"),
             CHARACTERISTIC_FIRMWARE_REVISION = new Guid("00002a26-0000-1000-8000-00805f9b34fb"),
             CHARACTERISTIC_HARDWARE_REVISION = new Guid("00002a27-0000-1000-8000-00805f9b34fb"),
-            GUID_METAWEAR_SERVICE = new Guid("326A9000-85CB-9195-D9DD-464CFBBAE75A"),
+            METAWEAR_COMMAND_CHARACTERISTIC = new Guid("326A9001-85CB-9195-D9DD-464CFBBAE75A"),
             METAWEAR_NOTIFY_CHARACTERISTIC = new Guid("326A9006-85CB-9195-D9DD-464CFBBAE75A");
+
         private static readonly Dictionary<Guid, String> DEVICE_INFO_NAMES = new Dictionary<Guid, String>();
 
         static DeviceInfo()
@@ -101,12 +53,18 @@ namespace MetaWear.NugetImplementation.SampleApp
             GYRO
         }
 
-        private Dictionary<Signal, IntPtr> signals = new Dictionary<Signal, IntPtr>();
-        private Dictionary<Guid, string> mwDeviceInfoChars = new Dictionary<Guid, string>();
+        DeviceInfo page;
+
         private BluetoothLEDevice selectedBtleDevice;
-        private IntPtr mwBoard;
+
+        private Dictionary<Guid, string> mwDeviceInfoChars = new Dictionary<Guid, string>();
+        private Dictionary<Signal, IntPtr> signals = new Dictionary<Signal, IntPtr>();
 
         private BtleConnection conn;
+        private IntPtr mwBoard;
+
+        private GattDeviceService mwGattService;
+        private Windows.Devices.Bluetooth.GenericAttributeProfile.GattCharacteristic mwNotifyChar;
 
         public DeviceInfo()
         {
@@ -125,17 +83,75 @@ namespace MetaWear.NugetImplementation.SampleApp
         {
             // todo... read gatt char
         }
-
-        private void WriteGattChar(IntPtr characteristic, IntPtr bytes, byte length)
+        
+        private string byteArrayToHex(byte[] array)
         {
-            // todo... figure out how to write gatt char 
+            var builder = new StringBuilder();
+
+            builder.Append(string.Format("[0x{0:X2}", array[0]));
+            for (int i = 1; i < array.Length; i++)
+            {
+                builder.Append(string.Format(", 0x{0:X2}", array[i]));
+            }
+            builder.Append("]");
+            return builder.ToString();
         }
 
-        private void Initialized() { }
+        private async void WriteGattChar(IntPtr characteristic, IntPtr bytes, byte length)
+        {
+            byte[] managedArray = new byte[length];
+            Marshal.Copy(bytes, managedArray, 0, length);
+            outputListView.Items.Add(new ConsoleLine(ConsoleEntryType.COMMAND, "Command: " + byteArrayToHex(managedArray)));
 
-        protected override void OnNavigatedTo(NavigationEventArgs e)
+            try
+            {
+                Windows.Devices.Bluetooth.GenericAttributeProfile.GattCharacteristic mwCommandChar = mwGattService.GetCharacteristics(METAWEAR_COMMAND_CHARACTERISTIC).FirstOrDefault();
+                GattCommunicationStatus status = await mwCommandChar.WriteValueAsync(managedArray.AsBuffer(), GattWriteOption.WriteWithoutResponse);
+
+                if (status != GattCommunicationStatus.Success)
+                {
+                    outputListView.Items.Add(new ConsoleLine(ConsoleEntryType.SEVERE, "Error writing command, GattCommunicationStatus= " + status));
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(ex.Message);
+            }
+        }
+
+        private void Initialized()
+        {
+            if (CoreApplication.MainView.CoreWindow.Dispatcher.HasThreadAccess)
+            {
+                page.IsEnabled = true;
+            }
+            else {
+                CoreApplication.MainView.CoreWindow.Dispatcher.RunAsync(CoreDispatcherPriority.Normal, () => page.IsEnabled = true);
+            }
+        }
+
+        protected override async void OnNavigatedTo(NavigationEventArgs e)
         {
             selectedBtleDevice = (BluetoothLEDevice)e.Parameter;
+            mwGattService = selectedBtleDevice.GetGattService(GUID_METAWEAR_SERVICE);
+
+            foreach (var characteristic in selectedBtleDevice.GetGattService(GUID_DEVICE_INFO_SERVICE).GetAllCharacteristics())
+            {
+                var result = await characteristic.ReadValueAsync();
+                string value = result.Status == GattCommunicationStatus.Success ?
+                    System.Text.Encoding.UTF8.GetString(result.Value.ToArray(), 0, (int)result.Value.Length) :
+                    "N/A";
+                mwDeviceInfoChars.Add(characteristic.Uuid, value);
+                outputListView.Items.Add(new ConsoleLine(ConsoleEntryType.INFO, DEVICE_INFO_NAMES[characteristic.Uuid] + ": " + value));
+            }
+
+            mwNotifyChar = mwGattService.GetCharacteristics(METAWEAR_NOTIFY_CHARACTERISTIC).First();
+            await mwNotifyChar.WriteClientCharacteristicConfigurationDescriptorAsync(GattClientCharacteristicConfigurationDescriptorValue.Notify);
+            mwNotifyChar.ValueChanged += new TypedEventHandler<Windows.Devices.Bluetooth.GenericAttributeProfile.GattCharacteristic, GattValueChangedEventArgs>((Windows.Devices.Bluetooth.GenericAttributeProfile.GattCharacteristic sender, GattValueChangedEventArgs obj) =>
+            {
+                byte[] response = obj.CharacteristicValue.ToArray();
+                Functions.mbl_mw_connection_notify_char_changed(mwBoard, response, (byte)response.Length);
+            });
         }
 
         public void acc_handler(IntPtr data) { receivedSensorData(data, Signal.ACCELEROMETER); }
@@ -148,7 +164,7 @@ namespace MetaWear.NugetImplementation.SampleApp
         private void receivedSensorData(IntPtr data, Signal signal)
         {
             object managedValue = null;
-            
+
             Data _data = Marshal.PtrToStructure<Data>(data);
 
             switch (_data.typeId)
@@ -167,7 +183,7 @@ namespace MetaWear.NugetImplementation.SampleApp
             if (managedValue == null) return;
 
             ConsoleLine newLine = new ConsoleLine(ConsoleEntryType.SENSOR);
-            
+
             switch (signal)
             {
                 case Signal.ACCELEROMETER:
@@ -246,29 +262,29 @@ namespace MetaWear.NugetImplementation.SampleApp
                 }
             }
             else {
-                // I could only find bmi160 specific funtions for some of these, but not all
+                //some of these functions are missing
 
                 //if (!signals.ContainsKey(Signal.ACCELEROMETER))
                 //{
-                //    signals[Signal.ACCELEROMETER] = AccelerometerBmi160.GetAccelerationDataSignal(mwBoard);
+                //    signals[Signal.ACCELEROMETER] = Functions.mbl_mw_acc_bmi160_get_acceleration_data_signal(mwBoard);
                 //}
 
                 //if (toggleSwitch != null)
                 //{
                 //    if (toggleSwitch.IsOn)
                 //    {
-                //        AccelerometerBmi160.SetOutputDataRate(mwBoard, AccelerometerBmi160.OutputDataRate.ODR_12_5HZ);
-                //        AccelerometerBmi160.SetFullScaleRange(mwBoard, AccelerometerBmi160.FullScaleRange.FSR_8G);
-                //        AccelerometerBmi160.WriteAccelerationConfig(mwBoard);
+                //        Functions.mbl_mw_acc_bmi160_set_odr(mwBoard, AccelerometerBmi160.OutputDataRate.ODR_12_5HZ);
+                //        Functions.mbl_mw_acc_bmi160_set_range(mwBoard, AccelerometerBmi160.FullScaleRange.FSR_8G);
+                //        Functions.mbl_mw_acc_bmi160_write_acceleration_config(mwBoard);
 
-                //        DataSignal.Subscribe(signals[Signal.ACCELEROMETER]);
-                //        AccelerometerBmi160.EnableAccelerationSampling(mwBoard);
-                //        AccelerometerBmi160.Start(mwBoard);
+                //        Functions.mbl_mw_datasignal_subscribe(signals[Signal.ACCELEROMETER], acc_handler);
+                //        Functions.mbl_mw_acc_bmi160_enable_acceleration_sampling(mwBoard);
+                //        Functions.mbl_mw_acc_bmi160_start(mwBoard);
                 //    }
                 //    else {
-                //        AccelerometerBmi160.Stop(mwBoard);
-                //        AccelerometerBmi160.DisableAccelerationSampling(mwBoard);
-                //        DataSignal.Unsubscribe(signals[Signal.ACCELEROMETER]);
+                //        Functions.mbl_mw_acc_bmi160_stop(mwBoard);
+                //        Functions.mbl_mw_acc_bmi160_disable_acceleration_sampling(mwBoard);
+                //        Functions.mbl_mw_datasignal_unsubscribe(signals[Signal.ACCELEROMETER]);
                 //    }
                 //}
             }

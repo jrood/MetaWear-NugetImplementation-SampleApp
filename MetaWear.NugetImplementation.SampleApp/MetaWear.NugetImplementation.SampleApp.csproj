@@ -95,6 +95,9 @@
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
     </Compile>
+    <Compile Include="ConsoleEntryType.cs" />
+    <Compile Include="ConsoleLine.cs" />
+    <Compile Include="ConsoleLineColorConverter.cs" />
     <Compile Include="DeviceInfo.xaml.cs">
       <DependentUpon>DeviceInfo.xaml</DependentUpon>
     </Compile>
