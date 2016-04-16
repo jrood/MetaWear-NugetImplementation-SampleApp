@@ -53,7 +53,7 @@ namespace MetaWear.NugetImplementation.SampleApp
             GYRO
         }
 
-        DeviceInfo page;
+        private DeviceInfo page;
 
         private BluetoothLEDevice selectedBtleDevice;
 
@@ -69,6 +69,8 @@ namespace MetaWear.NugetImplementation.SampleApp
         public DeviceInfo()
         {
             this.InitializeComponent();
+
+            page = this;
 
             conn = new BtleConnection()
             {
