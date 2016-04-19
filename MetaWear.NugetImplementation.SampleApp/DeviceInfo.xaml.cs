@@ -1,4 +1,4 @@
-﻿using MbientLab.MetaWear;
+﻿using static MbientLab.MetaWear.Functions;
 using MbientLab.MetaWear.Core;
 using MbientLab.MetaWear.Peripheral;
 using MbientLab.MetaWear.Sensor;
@@ -74,11 +74,11 @@ namespace MetaWear.NugetImplementation.SampleApp
 
             conn = new BtleConnection()
             {
-                readGattChar = ReadGattChar,
-                writeGattChar = WriteGattChar
+                readGattChar = new FnVoidPtr(ReadGattChar),
+                writeGattChar = new FnVoidPtrByteArray(WriteGattChar)
             };
-            mwBoard = Functions.mbl_mw_metawearboard_create(ref conn);
-            Functions.mbl_mw_metawearboard_initialize(mwBoard, Initialized);
+            mwBoard = mbl_mw_metawearboard_create(ref conn);
+            mbl_mw_metawearboard_initialize(mwBoard, Initialized);
         }
 
         private void ReadGattChar(IntPtr characteristic)
@@ -107,7 +107,7 @@ namespace MetaWear.NugetImplementation.SampleApp
 
             try
             {
-                Windows.Devices.Bluetooth.GenericAttributeProfile.GattCharacteristic mwCommandChar = mwGattService.GetCharacteristics(METAWEAR_COMMAND_CHARACTERISTIC).FirstOrDefault();
+                var mwCommandChar = mwGattService.GetCharacteristics(METAWEAR_COMMAND_CHARACTERISTIC).FirstOrDefault();
                 GattCommunicationStatus status = await mwCommandChar.WriteValueAsync(managedArray.AsBuffer(), GattWriteOption.WriteWithoutResponse);
 
                 if (status != GattCommunicationStatus.Success)
@@ -152,7 +152,7 @@ namespace MetaWear.NugetImplementation.SampleApp
             mwNotifyChar.ValueChanged += new TypedEventHandler<Windows.Devices.Bluetooth.GenericAttributeProfile.GattCharacteristic, GattValueChangedEventArgs>((Windows.Devices.Bluetooth.GenericAttributeProfile.GattCharacteristic sender, GattValueChangedEventArgs obj) =>
             {
                 byte[] response = obj.CharacteristicValue.ToArray();
-                Functions.mbl_mw_connection_notify_char_changed(mwBoard, response, (byte)response.Length);
+                mbl_mw_connection_notify_char_changed(mwBoard, response, (byte)response.Length);
             });
         }
 
@@ -225,12 +225,12 @@ namespace MetaWear.NugetImplementation.SampleApp
 
         private void startMotor(object sender, RoutedEventArgs e)
         {
-            Functions.mbl_mw_haptic_start_motor(mwBoard, (float)100, 5000);
+            mbl_mw_haptic_start_motor(mwBoard, (float)100, 5000);
         }
 
         private void startBuzzer(object sender, RoutedEventArgs e)
         {
-            Functions.mbl_mw_haptic_start_buzzer(mwBoard, 5000);
+            mbl_mw_haptic_start_buzzer(mwBoard, 5000);
         }
 
         private void toggleAccelerationSampling(object sender, RoutedEventArgs e)
@@ -241,25 +241,25 @@ namespace MetaWear.NugetImplementation.SampleApp
             {
                 if (!signals.ContainsKey(Signal.ACCELEROMETER))
                 {
-                    signals[Signal.ACCELEROMETER] = Functions.mbl_mw_acc_get_acceleration_data_signal(mwBoard);
+                    signals[Signal.ACCELEROMETER] = mbl_mw_acc_get_acceleration_data_signal(mwBoard);
                 }
 
                 if (toggleSwitch != null)
                 {
                     if (toggleSwitch.IsOn)
                     {
-                        Functions.mbl_mw_acc_mma8452q_set_odr(mwBoard, AccelerometerMma8452q.OutputDataRate.ODR_12_5HZ);
-                        Functions.mbl_mw_acc_mma8452q_set_range(mwBoard, AccelerometerMma8452q.FullScaleRange.FSR_8G);
-                        Functions.mbl_mw_acc_mma8452q_write_acceleration_config(mwBoard);
+                        mbl_mw_acc_mma8452q_set_odr(mwBoard, AccelerometerMma8452q.OutputDataRate.ODR_12_5HZ);
+                        mbl_mw_acc_mma8452q_set_range(mwBoard, AccelerometerMma8452q.FullScaleRange.FSR_8G);
+                        mbl_mw_acc_mma8452q_write_acceleration_config(mwBoard);
 
-                        Functions.mbl_mw_datasignal_subscribe(signals[Signal.ACCELEROMETER], acc_handler);
-                        Functions.mbl_mw_acc_mma8452q_enable_acceleration_sampling(mwBoard);
-                        Functions.mbl_mw_acc_mma8452q_start(mwBoard);
+                        mbl_mw_datasignal_subscribe(signals[Signal.ACCELEROMETER], acc_handler);
+                        mbl_mw_acc_mma8452q_enable_acceleration_sampling(mwBoard);
+                        mbl_mw_acc_mma8452q_start(mwBoard);
                     }
                     else {
-                        Functions.mbl_mw_acc_mma8452q_stop(mwBoard);
-                        Functions.mbl_mw_acc_mma8452q_disable_acceleration_sampling(mwBoard);
-                        Functions.mbl_mw_datasignal_unsubscribe(signals[Signal.ACCELEROMETER]);
+                        mbl_mw_acc_mma8452q_stop(mwBoard);
+                        mbl_mw_acc_mma8452q_disable_acceleration_sampling(mwBoard);
+                        mbl_mw_datasignal_unsubscribe(signals[Signal.ACCELEROMETER]);
                     }
                 }
             }
@@ -268,25 +268,25 @@ namespace MetaWear.NugetImplementation.SampleApp
 
                 //if (!signals.ContainsKey(Signal.ACCELEROMETER))
                 //{
-                //    signals[Signal.ACCELEROMETER] = Functions.mbl_mw_acc_bmi160_get_acceleration_data_signal(mwBoard);
+                //    signals[Signal.ACCELEROMETER] = mbl_mw_acc_bmi160_get_acceleration_data_signal(mwBoard);
                 //}
 
                 //if (toggleSwitch != null)
                 //{
                 //    if (toggleSwitch.IsOn)
                 //    {
-                //        Functions.mbl_mw_acc_bmi160_set_odr(mwBoard, AccelerometerBmi160.OutputDataRate.ODR_12_5HZ);
-                //        Functions.mbl_mw_acc_bmi160_set_range(mwBoard, AccelerometerBmi160.FullScaleRange.FSR_8G);
-                //        Functions.mbl_mw_acc_bmi160_write_acceleration_config(mwBoard);
+                //        mbl_mw_acc_bmi160_set_odr(mwBoard, AccelerometerBmi160.OutputDataRate.ODR_12_5HZ);
+                //        mbl_mw_acc_bmi160_set_range(mwBoard, AccelerometerBmi160.FullScaleRange.FSR_8G);
+                //        mbl_mw_acc_bmi160_write_acceleration_config(mwBoard);
 
-                //        Functions.mbl_mw_datasignal_subscribe(signals[Signal.ACCELEROMETER], acc_handler);
-                //        Functions.mbl_mw_acc_bmi160_enable_acceleration_sampling(mwBoard);
-                //        Functions.mbl_mw_acc_bmi160_start(mwBoard);
+                //        mbl_mw_datasignal_subscribe(signals[Signal.ACCELEROMETER], acc_handler);
+                //        mbl_mw_acc_bmi160_enable_acceleration_sampling(mwBoard);
+                //        mbl_mw_acc_bmi160_start(mwBoard);
                 //    }
                 //    else {
-                //        Functions.mbl_mw_acc_bmi160_stop(mwBoard);
-                //        Functions.mbl_mw_acc_bmi160_disable_acceleration_sampling(mwBoard);
-                //        Functions.mbl_mw_datasignal_unsubscribe(signals[Signal.ACCELEROMETER]);
+                //        mbl_mw_acc_bmi160_stop(mwBoard);
+                //        mbl_mw_acc_bmi160_disable_acceleration_sampling(mwBoard);
+                //        mbl_mw_datasignal_unsubscribe(signals[Signal.ACCELEROMETER]);
                 //    }
                 //}
             }
@@ -298,25 +298,25 @@ namespace MetaWear.NugetImplementation.SampleApp
 
             if (!signals.ContainsKey(Signal.BMP280_PRESSURE))
             {
-                signals[Signal.BMP280_PRESSURE] = Functions.mbl_mw_baro_bosch_get_pressure_data_signal(mwBoard);
+                signals[Signal.BMP280_PRESSURE] = mbl_mw_baro_bosch_get_pressure_data_signal(mwBoard);
             }
             if (!signals.ContainsKey(Signal.BMP280_ALTITUDE))
             {
-                signals[Signal.BMP280_ALTITUDE] = Functions.mbl_mw_baro_bosch_get_altitude_data_signal(mwBoard);
+                signals[Signal.BMP280_ALTITUDE] = mbl_mw_baro_bosch_get_altitude_data_signal(mwBoard);
             }
 
             if (toggleSwitch != null)
             {
                 if (toggleSwitch.IsOn)
                 {
-                    Functions.mbl_mw_datasignal_subscribe(signals[Signal.BMP280_ALTITUDE], baroAlt_handler);
-                    Functions.mbl_mw_datasignal_subscribe(signals[Signal.BMP280_PRESSURE], baroPre_handler);
-                    Functions.mbl_mw_baro_bosch_start(mwBoard);
+                    mbl_mw_datasignal_subscribe(signals[Signal.BMP280_ALTITUDE], baroAlt_handler);
+                    mbl_mw_datasignal_subscribe(signals[Signal.BMP280_PRESSURE], baroPre_handler);
+                    mbl_mw_baro_bosch_start(mwBoard);
                 }
                 else {
-                    Functions.mbl_mw_baro_bosch_stop(mwBoard);
-                    Functions.mbl_mw_datasignal_unsubscribe(signals[Signal.BMP280_ALTITUDE]);
-                    Functions.mbl_mw_datasignal_unsubscribe(signals[Signal.BMP280_PRESSURE]);
+                    mbl_mw_baro_bosch_stop(mwBoard);
+                    mbl_mw_datasignal_unsubscribe(signals[Signal.BMP280_ALTITUDE]);
+                    mbl_mw_datasignal_unsubscribe(signals[Signal.BMP280_PRESSURE]);
                 }
             }
         }
@@ -326,19 +326,19 @@ namespace MetaWear.NugetImplementation.SampleApp
             ToggleSwitch toggleSwitch = sender as ToggleSwitch;
             if (!signals.ContainsKey(Signal.AMBIENT_LIGHT))
             {
-                signals[Signal.AMBIENT_LIGHT] = Functions.mbl_mw_als_ltr329_get_illuminance_data_signal(mwBoard);
+                signals[Signal.AMBIENT_LIGHT] = mbl_mw_als_ltr329_get_illuminance_data_signal(mwBoard);
             }
 
             if (toggleSwitch != null)
             {
                 if (toggleSwitch.IsOn)
                 {
-                    Functions.mbl_mw_datasignal_subscribe(signals[Signal.AMBIENT_LIGHT], amb_handler);
-                    Functions.mbl_mw_als_ltr329_start(mwBoard);
+                    mbl_mw_datasignal_subscribe(signals[Signal.AMBIENT_LIGHT], amb_handler);
+                    mbl_mw_als_ltr329_start(mwBoard);
                 }
                 else {
-                    Functions.mbl_mw_als_ltr329_stop(mwBoard);
-                    Functions.mbl_mw_datasignal_unsubscribe(signals[Signal.AMBIENT_LIGHT]);
+                    mbl_mw_als_ltr329_stop(mwBoard);
+                    mbl_mw_datasignal_unsubscribe(signals[Signal.AMBIENT_LIGHT]);
                 }
             }
         }
@@ -348,24 +348,24 @@ namespace MetaWear.NugetImplementation.SampleApp
             ToggleSwitch toggleSwitch = sender as ToggleSwitch;
             if (!signals.ContainsKey(Signal.GYRO))
             {
-                signals[Signal.GYRO] = Functions.mbl_mw_gyro_bmi160_get_rotation_data_signal(mwBoard);
+                signals[Signal.GYRO] = mbl_mw_gyro_bmi160_get_rotation_data_signal(mwBoard);
             }
 
             if (toggleSwitch != null)
             {
                 if (toggleSwitch.IsOn)
                 {
-                    Functions.mbl_mw_datasignal_subscribe(signals[Signal.GYRO], gyro_handler);
-                    Functions.mbl_mw_gyro_bmi160_set_odr(mwBoard, GyroBmi160.OutputDataRate.ODR_25HZ);
-                    Functions.mbl_mw_gyro_bmi160_set_range(mwBoard, GyroBmi160.FullScaleRange.FSR_500DPS);
-                    Functions.mbl_mw_gyro_bmi160_write_config(mwBoard);
-                    Functions.mbl_mw_gyro_bmi160_enable_rotation_sampling(mwBoard);
-                    Functions.mbl_mw_gyro_bmi160_start(mwBoard);
+                    mbl_mw_datasignal_subscribe(signals[Signal.GYRO], gyro_handler);
+                    mbl_mw_gyro_bmi160_set_odr(mwBoard, GyroBmi160.OutputDataRate.ODR_25HZ);
+                    mbl_mw_gyro_bmi160_set_range(mwBoard, GyroBmi160.FullScaleRange.FSR_500DPS);
+                    mbl_mw_gyro_bmi160_write_config(mwBoard);
+                    mbl_mw_gyro_bmi160_enable_rotation_sampling(mwBoard);
+                    mbl_mw_gyro_bmi160_start(mwBoard);
                 }
                 else {
-                    Functions.mbl_mw_gyro_bmi160_stop(mwBoard);
-                    Functions.mbl_mw_gyro_bmi160_disable_rotation_sampling(mwBoard);
-                    Functions.mbl_mw_datasignal_unsubscribe(signals[Signal.GYRO]);
+                    mbl_mw_gyro_bmi160_stop(mwBoard);
+                    mbl_mw_gyro_bmi160_disable_rotation_sampling(mwBoard);
+                    mbl_mw_datasignal_unsubscribe(signals[Signal.GYRO]);
                 }
             }
         }
@@ -376,17 +376,17 @@ namespace MetaWear.NugetImplementation.SampleApp
 
             if (!signals.ContainsKey(Signal.SWITCH))
             {
-                signals[Signal.SWITCH] = Functions.mbl_mw_switch_get_state_data_signal(mwBoard);
+                signals[Signal.SWITCH] = mbl_mw_switch_get_state_data_signal(mwBoard);
             }
 
             if (toggleSwitch != null)
             {
                 if (toggleSwitch.IsOn)
                 {
-                    Functions.mbl_mw_datasignal_subscribe(signals[Signal.SWITCH], switch_handler);
+                    mbl_mw_datasignal_subscribe(signals[Signal.SWITCH], switch_handler);
                 }
                 else {
-                    Functions.mbl_mw_datasignal_unsubscribe(signals[Signal.SWITCH]);
+                    mbl_mw_datasignal_unsubscribe(signals[Signal.SWITCH]);
                 }
             }
         }
@@ -394,30 +394,30 @@ namespace MetaWear.NugetImplementation.SampleApp
         private void ledRedOn(object sender, RoutedEventArgs e)
         {
             Led.Pattern pattern = new Led.Pattern();
-            Functions.mbl_mw_led_load_preset_pattern(ref pattern, Led.PatternPreset.SOLID);
-            Functions.mbl_mw_led_write_pattern(mwBoard, ref pattern, Led.Color.RED);
-            Functions.mbl_mw_led_play(mwBoard);
+            mbl_mw_led_load_preset_pattern(ref pattern, Led.PatternPreset.SOLID);
+            mbl_mw_led_write_pattern(mwBoard, ref pattern, Led.Color.RED);
+            mbl_mw_led_play(mwBoard);
         }
 
         private void ledGreenOn(object sender, RoutedEventArgs e)
         {
             Led.Pattern pattern = new Led.Pattern();
-            Functions.mbl_mw_led_load_preset_pattern(ref pattern, Led.PatternPreset.BLINK);
-            Functions.mbl_mw_led_write_pattern(mwBoard, ref pattern, Led.Color.GREEN);
-            Functions.mbl_mw_led_play(mwBoard);
+            mbl_mw_led_load_preset_pattern(ref pattern, Led.PatternPreset.BLINK);
+            mbl_mw_led_write_pattern(mwBoard, ref pattern, Led.Color.GREEN);
+            mbl_mw_led_play(mwBoard);
         }
 
         private void ledBlueOn(object sender, RoutedEventArgs e)
         {
             Led.Pattern pattern = new Led.Pattern();
-            Functions.mbl_mw_led_load_preset_pattern(ref pattern, Led.PatternPreset.PULSE);
-            Functions.mbl_mw_led_write_pattern(mwBoard, ref pattern, Led.Color.BLUE);
-            Functions.mbl_mw_led_play(mwBoard);
+            mbl_mw_led_load_preset_pattern(ref pattern, Led.PatternPreset.PULSE);
+            mbl_mw_led_write_pattern(mwBoard, ref pattern, Led.Color.BLUE);
+            mbl_mw_led_play(mwBoard);
         }
 
         private void ledOff(object sender, RoutedEventArgs e)
         {
-            Functions.mbl_mw_led_stop_and_clear(mwBoard);
+            mbl_mw_led_stop_and_clear(mwBoard);
         }
     }
 }
